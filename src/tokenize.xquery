@@ -76,15 +76,6 @@ declare variable $s_breaktext :=
   }
 );
 
-declare variable $s_linenum :=
-(
-  element breaktext
-  {
-    attribute lang { "*" },
-    "1234567890"
-  }
-);
-
 declare variable $s_tbPunc :=
 (
   element punc
@@ -104,7 +95,6 @@ declare function local:process-nodes(
   $a_id as xs:string,
   $a_match-text as xs:string,
   $a_match-nontext as xs:string,
-  $a_match-linenum as xs:string,
   $a_match-punc as xs:string) as node()*
 {
   (: for each node :)
@@ -125,7 +115,6 @@ declare function local:process-nodes(
         concat($a_id, "-", $i),
         $a_match-text,
         $a_match-nontext,
-        $a_match-linenum,
         $a_match-punc)
     }
 
@@ -134,13 +123,17 @@ declare function local:process-nodes(
     return
     if ($a_in-text)
     then
-      local:process-text(normalize-space($t),
-                         concat($a_id, "-", $i),
-                         1,
-                         $a_match-text,
-                         $a_match-nontext,
-                         $a_match-linenum,
-                         $a_match-punc)
+        (: splitting on new lines is a hack to avoid a stack overflow in eXist for large
+           chunks of uninterrupted texts
+        :)
+        for $s at $k in tokenize($t,'\n')
+        return
+            local:process-text(normalize-space($s),
+                               concat($a_id, "-", $k, '-', $i),
+                               1,
+                               $a_match-text,
+                               $a_match-nontext,
+                               $a_match-punc)
     else
       $node
 
@@ -158,9 +151,9 @@ declare function local:process-text(
   $a_i as xs:integer,
   $a_match-text as xs:string,
   $a_match-nontext as xs:string,
-  $a_match-linenum as xs:string,
   $a_match-punc as xs:string) as node()*
 {
+  
   (: if anything to process :)
   if (string-length($a_text) > 0)
   then
@@ -169,9 +162,6 @@ declare function local:process-text(
     
      (: see if it starts with text :)
     let $is-punc := matches($a_text, $a_match-punc)
-    
-    (: see if its a line number:)
-    let $is-linenum := matches($a_text, $a_match-linenum)
 
     (: get initial text/non-text string :)
     let $t := replace($a_text,
@@ -189,13 +179,6 @@ declare function local:process-text(
               attribute n { $a_i },
               $t
             }
-        else if ($is-linenum)
-        then
-            element {QName("http://www.tei-c.org/ns/1.0","milestone")} 
-            {
-                attribute unit { "Line"},
-                attribute n { $t }
-            }
         else if ($is-punc)
         then
             element {QName("http://www.tei-c.org/ns/1.0","pc")}
@@ -206,22 +189,23 @@ declare function local:process-text(
              }
         else
           text { $t },
+    
       (: then recursively process rest of text :)
       local:process-text(substring-after($a_text, $t),
                          $a_id,
                          $a_i + 1,
                          $a_match-text,
                          $a_match-nontext,
-                         $a_match-linenum,
                          $a_match-punc)
     )
   else ()
 };
 
 let $e_uri := replace(request:get-parameter('uri',''),' ','%20')
-let $e_lang := request:get-parameter('uri','')
+let $e_lang := request:get-parameter('lang','')
 let $doc := doc($e_uri)
-let $lang := if ($e_lang) then $e_lang else $doc//tei:text[@xml:lang]
+let $lang := if ($e_lang) then $e_lang else $doc//tei:text/@xml:lang
+
 let $nontext :=
   if ($s_nontext[@lang eq $lang])
   then
@@ -234,23 +218,19 @@ let $breaktext :=
     $s_breaktext[@lang eq $lang]/text()
   else
     $s_breaktext[@lang eq "*"]/text()
-let $linenum :=
-    $s_linenum[@lang eq "*"]/text()
 let $punc :=
     $s_tbPunc[@lang eq "*"]/text()
     
 let $match-text :=
-  concat("^([^", $nontext, $breaktext, $linenum, "]+",
+  concat("^([^", $nontext, $breaktext, "]+",
          if ($breaktext) then concat("[", $breaktext, "]?") else (),
          ").*")
-let $match-nontext := concat("^([", $nontext, $linenum, "]+).*")
-
-let $match-linenum := concat("^([", $linenum, "]+).*")
+let $match-nontext := concat("^([", $nontext, "]+).*")
 
 let $match-punc := concat("^([", $punc, "]+).*")
 
 return 
 <doc>
-    {local:process-nodes($doc/node(), false(), "w1", $match-text, $match-nontext, $match-linenum, $match-punc)}
+    {local:process-nodes($doc/node(), false(), "w1", $match-text, $match-nontext, $match-punc)}
 </doc>
-
+   
