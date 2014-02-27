@@ -33,6 +33,7 @@
  :)
 
 import module namespace request="http://exist-db.org/xquery/request";
+import module namespace response="http://exist-db.org/xquery/response";
 
 declare namespace tei="http://www.tei-c.org/ns/1.0";
 
@@ -93,6 +94,9 @@ declare function local:process-nodes(
   $a_nodes as node()*,
   $a_in-text as xs:boolean,
   $a_id as xs:string,
+  $a_tagns as xs:string,
+  $a_wtag as xs:string,
+  $a_ptag as xs:string,
   $a_match-text as xs:string,
   $a_match-nontext as xs:string,
   $a_match-punc as xs:string) as node()*
@@ -113,6 +117,9 @@ declare function local:process-nodes(
         ($a_in-text or (local-name($node) eq "body")) 
         and not(local-name($node) = ("note", "head", "speaker")),
         concat($a_id, "-", $i),
+        $a_tagns,
+        $a_wtag,
+        $a_ptag,
         $a_match-text,
         $a_match-nontext,
         $a_match-punc)
@@ -130,6 +137,9 @@ declare function local:process-nodes(
         return
             local:process-text(normalize-space($s),
                                concat($a_id, "-", $k, '-', $i),
+                               $a_tagns,
+                               $a_wtag,
+                               $a_ptag,
                                1,
                                $a_match-text,
                                $a_match-nontext,
@@ -148,6 +158,9 @@ declare function local:process-nodes(
 declare function local:process-text(
   $a_text as xs:string,
   $a_id as xs:string,
+  $a_tagns as xs:string,
+  $a_wtag as xs:string,
+  $a_ptag as xs:string,
   $a_i as xs:integer,
   $a_match-text as xs:string,
   $a_match-nontext as xs:string,
@@ -173,7 +186,7 @@ declare function local:process-text(
       (: return w element with text or non-text string :)      
       if ($is-text)
       then
-        element {QName("http://www.tei-c.org/ns/1.0","w")}
+        element {QName($a_tagns,$a_wtag)}
             {
               (: assign position to n-attribute :)
               attribute n { $a_i },
@@ -181,7 +194,7 @@ declare function local:process-text(
             }
         else if ($is-punc)
         then
-            element {QName("http://www.tei-c.org/ns/1.0","pc")}
+            element {QName($a_tagns,$a_ptag)}
             {
              (: assign position to n-attribute word :)
               attribute n { $a_i },
@@ -193,6 +206,9 @@ declare function local:process-text(
       (: then recursively process rest of text :)
       local:process-text(substring-after($a_text, $t),
                          $a_id,
+                         $a_tagns,
+                         $a_wtag,
+                         $a_ptag,
                          $a_i + 1,
                          $a_match-text,
                          $a_match-nontext,
@@ -201,10 +217,16 @@ declare function local:process-text(
   else ()
 };
 
+let $h := response:set-header("Access-Control-Allow-Origin","*")
 let $e_uri := replace(request:get-parameter('uri',''),' ','%20')
 let $e_lang := request:get-parameter('lang','')
+let $e_tag := request:get-parameter('tags','')
 let $doc := doc($e_uri)
 let $lang := if ($e_lang) then $e_lang else $doc//tei:text/@xml:lang
+
+let $wtag := if ($e_tag) then $e_tag else 'w'
+let $tagns := if ($e_tag) then '' else "http://www.tei-c.org/ns/1.0"
+let $ptag := if ($e_tag) then $e_tag else 'pc' 
 
 let $nontext :=
   if ($s_nontext[@lang eq $lang])
@@ -231,6 +253,6 @@ let $match-punc := concat("^([", $punc, "]+).*")
 
 return 
 <doc>
-    {local:process-nodes($doc/node(), false(), "w1", $match-text, $match-nontext, $match-punc)}
+    {local:process-nodes($doc/node(), false(), "w1", $tagns, $wtag, $ptag, $match-text, $match-nontext, $match-punc)}
 </doc>
    
