@@ -106,24 +106,29 @@ declare function local:process-nodes(
   return
   typeswitch ($node)
     (:
-      if element, copy and process all child nodes
+      if element copy and process all child nodes
      :)
-    case element()
+    case element() 
     return
-    element { QName(namespace-uri($node),name($node)) }
-    {
-      local:process-nodes(
-        $node/(node()|@*),
-        ($a_in-text or (local-name($node) eq "body")) 
-        and not(local-name($node) = ("note", "head", "speaker")),
-        concat($a_id, "-", $i),
-        $a_tagns,
-        $a_wtag,
-        $a_ptag,
-        $a_match-text,
-        $a_match-nontext,
-        $a_match-punc)
-    }
+        if ($node/text())
+        then
+            element { QName(namespace-uri($node),name($node)) }
+            { 
+              local:process-nodes(
+                $node/(node()|@*),
+                ($a_in-text or (local-name($node) eq "body")) 
+                and not(local-name($node) = ("note", "head", "speaker")),
+                concat($a_id, "-", $i),
+                $a_tagns,
+                $a_wtag,
+                $a_ptag,
+                $a_match-text,
+                $a_match-nontext,
+                $a_match-punc)
+            }
+        else
+           (: if it's empty node, copy it and process the next :)
+           $node
 
     (: if text in body, process it else just copy it :)
     case $t as text()
