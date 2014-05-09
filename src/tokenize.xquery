@@ -36,6 +36,8 @@ import module namespace request="http://exist-db.org/xquery/request";
 import module namespace response="http://exist-db.org/xquery/response";
 
 declare namespace tei="http://www.tei-c.org/ns/1.0";
+declare option exist:serialize "method=xml media-type=text/xml indent=no";
+
 
 (: sets of characters by language :)
 (: non-text characters :)
@@ -64,6 +66,11 @@ declare variable $s_breaktext :=
   {
     attribute lang { "grc" },
     "᾽"
+  },
+   element breaktext
+  {
+    attribute lang { "fre" },
+    "᾽ʼ"
   },
    element breaktext
   {
